@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0b0d;
+  --surface: #141418;
+  --surface-2: #1c1c22;
+  --ink: #f4f1ea;
+  --muted: #9c9890;
+  --accent: #b48cff;
+  --accent-2: #8f6adf;
+  --line: #2a2a32;
+  --danger: #e07a7a;
+  --ok: #7dcaa5;
+  --focus: #e6d8ff;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-line: var(--line);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  min-height: 100%;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 40%, black);
+  color: white;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 80;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #120c1c;
+  padding: 0.5rem 0.9rem;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
