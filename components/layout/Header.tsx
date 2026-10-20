@@ -10,7 +10,7 @@ import { SearchControls } from "./SearchOverlay";
 import { RegionSelect } from "./RegionSelect";
 import { cn } from "@/lib/utils";
 
-export function Header({
+function HeaderContent({
   region,
   countries,
 }: {
@@ -22,10 +22,6 @@ export function Header({
   const [more, setMore] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setOpen(false);
-    setMore(false);
-  }, [pathname]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -146,4 +142,14 @@ export function Header({
       ) : null}
     </header>
   );
+}
+
+
+export function Header(props: {
+  region: string;
+  countries: Array<{ iso_3166_1: string; english_name: string }>;
+}) {
+  const pathname = usePathname();
+
+  return <HeaderContent key={pathname} {...props} />;
 }

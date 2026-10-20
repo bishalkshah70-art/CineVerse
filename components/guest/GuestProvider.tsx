@@ -43,8 +43,10 @@ export function GuestProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setState(parseGuest(localStorage.getItem(GUEST_KEY)));
-    setHydrated(true);
+    queueMicrotask(() => {
+      setState(parseGuest(localStorage.getItem(GUEST_KEY)));
+      setHydrated(true);
+    });
   }, []);
 
   useEffect(() => {

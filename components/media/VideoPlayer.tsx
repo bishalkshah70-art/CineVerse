@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
 
 type VideoPlayerProps = {
   src: string;
@@ -17,75 +18,103 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const [message, setMessage] = useState("Loading video…");
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+
+    let hls: Hls | null = null;
+    let cancelled = false;
+
+    setReady(false);
+    setPlaying(false);
+    setMessage("Loading video…");
+
+    const isHls = /\.m3u8(?:$|[?#])/i.test(src);
+
+    if (!isHls) {
+      video.src = src;
+      video.load();
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari and other browsers with native HLS support.
+      video.src = src;
+      video.load();
+    } else if (Hls.isSupported()) {
+      hls = new Hls();
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!cancelled) setMessage("Stream ready. Press play to start.");
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (cancelled || !data.fatal) return;
+        setReady(false);
+        setMessage(
+          data.type === Hls.ErrorTypes.NETWORK_ERROR
+            ? "Unable to load the HLS stream. Check the playlist URL, network, and CORS settings."
+            : "This HLS stream could not be played. Check its format and encoding."
+        );
+        hls?.destroy();
+        hls = null;
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+    } else {
+      // Unsupported HLS is reported through the player's media error handler.
+      video.removeAttribute("src");
+    }
+
+    return () => {
+      cancelled = true;
+      hls?.destroy();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [src]);
+
+  useEffect(() => {
+    function syncFullscreen() {
+      setFullscreen(document.fullscreenElement === wrapperRef.current);
+    }
+
     function handleKeyboard(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-
-      // Don't hijack typing in inputs or keyboard use of buttons.
       if (
         target?.isContentEditable ||
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        tag === "BUTTON"
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target?.tagName ?? "")
       ) return;
 
       const video = videoRef.current;
-      const wrapper = wrapperRef.current;
-      if (!video || !wrapper) return;
+      if (!video) return;
 
       const key = event.key.toLowerCase();
 
-      if (key === " " || key === "k") {
+      if (key === "k" || key === " ") {
         event.preventDefault();
-        void togglePlayback();
-      } else if (key === "arrowleft") {
+        if (video.paused) void video.play().catch(() => {
+          setMessage("Playback could not start. Check the stream URL.");
+        });
+        else video.pause();
+      } else if (key === "arrowleft" || key === "j") {
         event.preventDefault();
-        seekBy(-5);
-      } else if (key === "arrowright") {
+        video.currentTime = Math.max(0, video.currentTime - (key === "j" ? 10 : 5));
+      } else if (key === "arrowright" || key === "l") {
         event.preventDefault();
-        seekBy(5);
-      } else if (key === "j") {
-        event.preventDefault();
-        seekBy(-10);
-      } else if (key === "l") {
-        event.preventDefault();
-        seekBy(10);
+        video.currentTime = Math.min(
+          Number.isFinite(video.duration) ? video.duration : video.currentTime + 5,
+          video.currentTime + (key === "l" ? 10 : 5)
+        );
+      } else if (key === "m") {
+        video.muted = !video.muted;
       } else if (key === "f") {
         event.preventDefault();
         void toggleFullscreen();
-      } else if (key === "m") {
-        event.preventDefault();
-        video.muted = !video.muted;
-      } else if (key === "arrowup") {
-        event.preventDefault();
-        video.volume = Math.min(1, video.volume + 0.1);
-        if (video.volume > 0) video.muted = false;
-      } else if (key === "arrowdown") {
-        event.preventDefault();
-        video.volume = Math.max(0, video.volume - 0.1);
-      } else if (key === "home") {
-        event.preventDefault();
-        video.currentTime = 0;
-      } else if (key === "end") {
-        event.preventDefault();
-        if (Number.isFinite(video.duration)) {
-          video.currentTime = video.duration;
-        }
       } else if (key === "escape" && document.fullscreenElement) {
         void document.exitFullscreen();
       }
-    }
-
-    function syncFullscreen() {
-      setFullscreen(document.fullscreenElement === wrapperRef.current);
     }
 
     document.addEventListener("fullscreenchange", syncFullscreen);
@@ -95,45 +124,6 @@ export default function VideoPlayer({
       document.removeEventListener("keydown", handleKeyboard);
     };
   }, []);
-
-  function seekBy(seconds: number) {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(video.duration)) return;
-
-    video.currentTime = Math.max(
-      0,
-      Math.min(video.duration, video.currentTime + seconds)
-    );
-  }
-
-  async function togglePlayback() {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (video.paused) {
-      try {
-        await video.play();
-      } catch {
-        setMessage("Playback could not start. Use the video controls.");
-      }
-    } else {
-      video.pause();
-    }
-  }
-
-  function handleVideoTap(event: React.MouseEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const third = rect.width / 3;
-
-    if (x < third) {
-      seekBy(-5);
-    } else if (x >= third * 2) {
-      seekBy(5);
-    } else {
-      void togglePlayback();
-    }
-  }
 
   async function toggleFullscreen() {
     const wrapper = wrapperRef.current;
@@ -157,18 +147,18 @@ export default function VideoPlayer({
         className={
           fullscreen
             ? "flex h-screen w-screen items-center justify-center overflow-hidden bg-black"
-            : "relative overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl"
+            : "overflow-hidden rounded-xl border border-white/10 bg-black shadow-2xl"
         }
       >
         <video
           ref={videoRef}
+          key={src}
           className={
             fullscreen
               ? "h-full w-full object-contain"
               : "aspect-video w-full bg-black"
           }
           controls
-          controlsList="nofullscreen"
           playsInline
           preload="metadata"
           poster={poster}
@@ -189,10 +179,9 @@ export default function VideoPlayer({
           onEnded={() => setPlaying(false)}
           onError={() => {
             setReady(false);
-            setMessage("Video could not be loaded.");
+            setMessage("Video could not be loaded. Check the stream URL and server.");
           }}
         >
-          <source src={src} type="video/mp4" />
           {captions ? (
             <track
               src={captions}
@@ -204,28 +193,18 @@ export default function VideoPlayer({
           ) : null}
           Your browser does not support HTML video playback.
         </video>
-
-        <div
-          className="absolute inset-x-0 top-0 bottom-14 z-10 cursor-pointer"
-          onClick={handleVideoTap}
-          aria-label="Tap left to rewind, middle to play or pause, right to skip"
-        />
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3">
         <p className="text-sm text-gray-400" role="status">
-          {message ||
-            (ready
-              ? `${playing ? "Playing" : "Paused"}: ${title}`
-              : "Preparing video…")}
+          {message || (ready ? `${playing ? "Playing" : "Paused"}: ${title}` : "Preparing video…")}
         </p>
-
         <button
           type="button"
           onClick={() => void toggleFullscreen()}
           className="shrink-0 rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10"
         >
-          {fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+          {fullscreen ? "Exit fullscreen" : "Fullscreen"}
         </button>
       </div>
     </section>

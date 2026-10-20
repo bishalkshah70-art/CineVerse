@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { useGuest } from "@/components/guest/GuestProvider";
@@ -47,7 +48,6 @@ export function SearchControls() {
     if (!open) return;
     const trimmed = q.trim();
     if (trimmed.length < 2) {
-      setHits([]);
       return;
     }
     const handle = window.setTimeout(async () => {
@@ -97,6 +97,8 @@ export function SearchControls() {
     }, 280);
     return () => window.clearTimeout(handle);
   }, [q, open]);
+
+  const visibleHits = q.trim().length >= 2 ? hits : [];
 
   return (
     <>
@@ -174,9 +176,9 @@ export function SearchControls() {
                   </ul>
                 </div>
               ) : null}
-              {hits.length ? (
+              {visibleHits.length ? (
                 <ul className="space-y-1">
-                  {hits.map((hit) => (
+                  {visibleHits.map((hit) => (
                     <li key={`${hit.mediaType}-${hit.id}`}>
                       <Link
                         href={mediaPath(hit.mediaType, hit.id)}
@@ -188,11 +190,13 @@ export function SearchControls() {
                       >
                         <span className="flex items-center gap-3">
                           {hit.posterPath ? (
-                            <img
-                              src={`https://image.tmdb.org/t/p/w92${hit.posterPath}`}
-                              alt=""
-                              className="h-16 w-11 shrink-0 rounded object-cover"
-                            />
+                            <Image
+          src={`https://image.tmdb.org/t/p/w92${hit.posterPath}`}
+          alt=""
+          width={44}
+          height={64}
+          className="h-16 w-11 shrink-0 rounded object-cover"
+        />
                           ) : (
                             <span className="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-surface-2 text-xs text-muted">
                               No image

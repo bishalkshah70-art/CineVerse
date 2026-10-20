@@ -1,6 +1,5 @@
 import { CatalogPage } from "@/components/catalog/CatalogPage";
 import { ANIME_COLLECTIONS } from "@/lib/catalog";
-import { ANIME_KEYWORD } from "@/lib/constants";
 
 export default async function AnimePage({
   searchParams,
@@ -10,12 +9,15 @@ export default async function AnimePage({
   return (
     <CatalogPage
       title="Anime"
-      lead="Explore anime series, Japanese animation, and new favourites."
+      lead="Explore Japanese anime, animated series, and donghua."
       kind="tv"
       action="/anime"
       collections={ANIME_COLLECTIONS}
       searchParams={searchParams}
-      preset={{ with_keywords: String(ANIME_KEYWORD) }}
+      preset={{
+        with_genres: "16",
+        with_original_language: "ja",
+      }}
     />
   );
 }

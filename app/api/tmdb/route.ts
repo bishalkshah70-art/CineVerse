@@ -38,6 +38,40 @@ export async function GET(request: Request) {
   const category = searchParams.get("category") || "trending";
 
   try {
+    if (category === "season") {
+      const id = searchParams.get("id");
+      const season = searchParams.get("season");
+
+      if (
+        !id ||
+        !/^[0-9]+$/.test(id) ||
+        !season ||
+        !/^[0-9]+$/.test(season)
+      ) {
+        return NextResponse.json(
+          { error: "A valid TV ID and season number are required." },
+          { status: 400 }
+        );
+      }
+
+      const response = await tmdbFetch(
+        `/tv/${id}/season/${season}`,
+        { language: "en-US" }
+      );
+
+      if (!response.ok) {
+        return NextResponse.json(
+          {
+            error: "TMDB could not load season details.",
+            status: response.status,
+          },
+          { status: response.status }
+        );
+      }
+
+      return NextResponse.json(await response.json());
+    }
+
     if (category === "detail") {
       const id = searchParams.get("id");
       const type = searchParams.get("type") || "movie";
@@ -49,10 +83,12 @@ export async function GET(request: Request) {
         );
       }
 
-      const [detailsResponse, videosResponse] = await Promise.all([
-        tmdbFetch(`/${type}/${id}`, { language: "en-US" }),
-        tmdbFetch(`/${type}/${id}/videos`, { language: "en-US" }),
-      ]);
+      const [detailsResponse, videosResponse, providersResponse] =
+        await Promise.all([
+          tmdbFetch(`/${type}/${id}`, { language: "en-US" }),
+          tmdbFetch(`/${type}/${id}/videos`, { language: "en-US" }),
+          tmdbFetch(`/${type}/${id}/watch/providers`).catch(() => null),
+        ]);
 
       if (!detailsResponse.ok) {
         return NextResponse.json(
@@ -73,13 +109,18 @@ export async function GET(request: Request) {
         videosResponse.json(),
       ]);
 
-      return NextResponse.json({ details, videos });
+      const providers = providersResponse?.ok
+        ? await providersResponse.json()
+        : null;
+
+      return NextResponse.json({ details, videos, providers });
     }
 
     const endpoints: Record<string, string> = {
       trending: "/trending/all/week",
       movies: "/movie/popular",
       tv: "/tv/popular",
+      anime: "/discover/tv",
     };
 
     let endpoint = endpoints[category];
@@ -91,6 +132,13 @@ export async function GET(request: Request) {
     }
 
     const params: Record<string, string> = { language: "en-US" };
+
+    if (category === "anime") {
+      params.with_genres = "16";
+      params.with_original_language = "ja";
+      params.sort_by = "popularity.desc";
+      params.page = searchParams.get("page") || "1";
+    }
 
     if (query) {
       params.query = query;

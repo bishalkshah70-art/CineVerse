@@ -18,6 +18,21 @@ type MovieDetails = {
   genres?: { id: number; name: string }[];
 };
 
+
+type ProviderItem = {
+  provider_id: number;
+  provider_name: string;
+  logo_path?: string;
+};
+
+type ProviderCountry = {
+  link?: string;
+  flatrate?: ProviderItem[];
+  free?: ProviderItem[];
+  ads?: ProviderItem[];
+  rent?: ProviderItem[];
+  buy?: ProviderItem[];
+};
 type Video = {
   key: string;
   name: string;
@@ -32,6 +47,7 @@ export default function MoviePage() {
 
   const [movie, setMovie] = useState<MovieDetails | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
+  const [providers, setProviders] = useState<ProviderCountry | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [playbackMessage, setPlaybackMessage] = useState("");
@@ -59,6 +75,7 @@ export default function MoviePage() {
 
         setMovie(data.details);
         setVideos(data.videos?.results ?? []);
+        setProviders(data.providers?.results?.NP ?? null);
       } catch (err) {
         if (err instanceof Error && err.name !== "AbortError") {
           setError(err.message);
@@ -177,6 +194,64 @@ export default function MoviePage() {
                   </a>
                 ) : null}
               </div>
+              <section className="mt-8 max-w-2xl rounded-xl border border-white/10 bg-white/5 p-5">
+                <h2 className="text-lg font-bold">Where to watch in Nepal</h2>
+                {providers ? (
+                  <>
+                    {providers.link ? (
+                      <a
+                        href={providers.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-block text-red-400 underline hover:text-red-300"
+                      >
+                        View official availability on TMDB
+                      </a>
+                    ) : null}
+                    {([
+                      ["Streaming", providers.flatrate],
+                      ["Free", providers.free],
+                      ["Free with ads", providers.ads],
+                      ["Rent", providers.rent],
+                      ["Buy", providers.buy],
+                    ] as const).map(([label, items]) =>
+                      items?.length ? (
+                        <div key={label} className="mt-4">
+                          <h3 className="text-sm font-semibold text-gray-300">{label}</h3>
+                          <ul className="mt-2 flex flex-wrap gap-2">
+                            {items.map((item) => (
+                              <li
+                                key={item.provider_id}
+                                className="rounded-lg border border-white/10 px-3 py-2 text-sm"
+                              >
+                                {item.provider_name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null
+                    )}
+                    {!providers.link &&
+                    !providers.flatrate?.length &&
+                    !providers.free?.length &&
+                    !providers.ads?.length &&
+                    !providers.rent?.length &&
+                    !providers.buy?.length ? (
+                      <p className="mt-2 text-sm text-gray-400">
+                        TMDB has no Nepal availability details for this title.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-400">
+                    Nepal availability information is currently unavailable.
+                  </p>
+                )}
+                <p className="mt-4 text-xs leading-5 text-gray-500">
+                  Availability can change. Check the provider&apos;s official page for current access and any fees.
+                </p>
+              </section>
+
               {!trailer ? (
                 <p className="mt-3 text-sm text-gray-400">
                   No trailer is currently listed on TMDB.

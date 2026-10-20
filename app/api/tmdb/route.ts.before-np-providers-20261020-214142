@@ -1,0 +1,150 @@
+
+import { NextResponse } from "next/server";
+
+const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+
+async function tmdbFetch(path: string, params: Record<string, string> = {}) {
+  const url = new URL(`${TMDB_BASE_URL}${path}`);
+
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  const apiKey = process.env.TMDB_API_KEY;
+  const readToken = process.env.TMDB_READ_TOKEN;
+
+  if (apiKey) {
+    url.searchParams.set("api_key", apiKey);
+  }
+
+  return fetch(url.toString(), {
+    headers: readToken && !apiKey
+      ? { Authorization: `Bearer ${readToken}` }
+      : {},
+    next: { revalidate: 300 },
+  });
+}
+
+export async function GET(request: Request) {
+  if (!process.env.TMDB_API_KEY && !process.env.TMDB_READ_TOKEN) {
+    return NextResponse.json(
+      { error: "TMDB credentials are missing from .env.local" },
+      { status: 500 }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get("query")?.trim();
+  const category = searchParams.get("category") || "trending";
+
+  try {
+    if (category === "season") {
+      const id = searchParams.get("id");
+      const season = searchParams.get("season");
+
+      if (
+        !id ||
+        !/^[0-9]+$/.test(id) ||
+        !season ||
+        !/^[0-9]+$/.test(season)
+      ) {
+        return NextResponse.json(
+          { error: "A valid TV ID and season number are required." },
+          { status: 400 }
+        );
+      }
+
+      const response = await tmdbFetch(
+        `/tv/${id}/season/${season}`,
+        { language: "en-US" }
+      );
+
+      if (!response.ok) {
+        return NextResponse.json(
+          {
+            error: "TMDB could not load season details.",
+            status: response.status,
+          },
+          { status: response.status }
+        );
+      }
+
+      return NextResponse.json(await response.json());
+    }
+
+    if (category === "detail") {
+      const id = searchParams.get("id");
+      const type = searchParams.get("type") || "movie";
+
+      if (!id || !/^\d+$/.test(id) || !["movie", "tv"].includes(type)) {
+        return NextResponse.json(
+          { error: "Invalid movie or TV ID." },
+          { status: 400 }
+        );
+      }
+
+      const [detailsResponse, videosResponse] = await Promise.all([
+        tmdbFetch(`/${type}/${id}`, { language: "en-US" }),
+        tmdbFetch(`/${type}/${id}/videos`, { language: "en-US" }),
+      ]);
+
+      if (!detailsResponse.ok) {
+        return NextResponse.json(
+          { error: "TMDB could not load movie details.", status: detailsResponse.status },
+          { status: detailsResponse.status }
+        );
+      }
+
+      if (!videosResponse.ok) {
+        return NextResponse.json(
+          { error: "TMDB could not load trailer information.", status: videosResponse.status },
+          { status: videosResponse.status }
+        );
+      }
+
+      const [details, videos] = await Promise.all([
+        detailsResponse.json(),
+        videosResponse.json(),
+      ]);
+
+      return NextResponse.json({ details, videos });
+    }
+
+    const endpoints: Record<string, string> = {
+      trending: "/trending/all/week",
+      movies: "/movie/popular",
+      tv: "/tv/popular",
+    };
+
+    let endpoint = endpoints[category];
+
+    if (query) endpoint = "/search/multi";
+
+    if (!endpoint) {
+      return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+    }
+
+    const params: Record<string, string> = { language: "en-US" };
+
+    if (query) {
+      params.query = query;
+      params.include_adult = "false";
+    }
+
+    const response = await tmdbFetch(endpoint, params);
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: "TMDB request failed", status: response.status },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(await response.json());
+  } catch {
+    return NextResponse.json(
+      { error: "Unable to connect to TMDB" },
+      { status: 502 }
+    );
+  }
+}

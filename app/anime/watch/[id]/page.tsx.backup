@@ -1,0 +1,214 @@
+import Link from "next/link";
+import VideoPlayer from "@/components/media/VideoPlayer";
+import { getAnimeEpisodes } from "@/lib/streaming/types";
+
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    season?: string;
+    episode?: string;
+    audio?: string;
+    server?: string;
+  }>;
+};
+
+export default async function AnimeWatchPage({
+  params,
+  searchParams,
+}: Props) {
+  const { id } = await params;
+  const query = await searchParams;
+
+  if (!/^\d+$/.test(id)) {
+    return (
+      <main className="min-h-screen bg-[#08090d] p-8 text-white">
+        Invalid anime ID.
+      </main>
+    );
+  }
+
+  const episodes = getAnimeEpisodes(id);
+  const seasonNumber = Math.max(0, Number(query.season) || 1);
+  const episodeNumber = Math.max(1, Number(query.episode) || 1);
+  const audio = query.audio === "dub" ? "dub" : "sub";
+
+  const seasonEpisodes = episodes.filter(
+    (item) => (item.season ?? 1) === seasonNumber
+  );
+
+  const episode = seasonEpisodes.find(
+    (item) => item.number === episodeNumber
+  );
+
+  const sources =
+    episode?.sources.filter((item) => item.audio === audio) ?? [];
+
+  const source =
+    sources.find((item) => item.id === query.server) ?? sources[0];
+
+  const seasons = [...new Set(episodes.map((item) => item.season ?? 1))]
+    .sort((a, b) => a - b);
+
+  function episodeHref(number: number) {
+    const params = new URLSearchParams({
+      season: String(seasonNumber),
+      episode: String(number),
+      audio,
+    });
+    return `/anime/watch/${id}?${params.toString()}`;
+  }
+
+  return (
+    <main className="min-h-screen bg-[#08090d] px-4 py-8 text-white sm:px-8">
+      <div className="mx-auto max-w-6xl">
+        <Link href="/anime" className="text-sm text-gray-400 hover:text-white">
+          ← Back to Anime
+        </Link>
+
+        <p className="mt-8 text-xs font-bold uppercase tracking-[0.25em] text-red-400">
+          CineVerse Anime
+        </p>
+
+        <h1 className="mt-2 text-3xl font-black">
+          {episode?.title || `Season ${seasonNumber} · Episode ${episodeNumber}`}
+        </h1>
+
+        <p className="mt-2 mb-6 text-sm text-gray-400">
+          Anime ID: {id} · Season {seasonNumber} · Episode {episodeNumber}
+        </p>
+
+        {source ? (
+          <VideoPlayer
+            key={`${id}-${seasonNumber}-${episodeNumber}-${audio}-${source.id}`}
+            src={source.url}
+            title={episode?.title || `Episode ${episodeNumber}`}
+            captions={source.subtitles?.[0]?.url}
+          />
+        ) : (
+          <section className="rounded-xl border border-white/10 bg-white/[0.03] p-8">
+            <h2 className="text-xl font-bold">No stream configured</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+              No authorized video source is configured for this season,
+              episode, and audio language. Add a valid video URL to your
+              server-side stream configuration to enable playback.
+            </p>
+          </section>
+        )}
+
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">Audio</h2>
+          <div className="flex flex-wrap gap-2">
+            {(["sub", "dub"] as const).map((language) => {
+              const params = new URLSearchParams({
+                season: String(seasonNumber),
+                episode: String(episodeNumber),
+                audio: language,
+              });
+
+              return (
+                <Link
+                  key={language}
+                  href={`/anime/watch/${id}?${params.toString()}`}
+                  className={`rounded-lg border px-4 py-2 text-sm ${
+                    audio === language
+                      ? "border-red-500 bg-red-500 text-white"
+                      : "border-white/15 hover:bg-white/10"
+                  }`}
+                >
+                  {language === "sub" ? "Sub" : "Dub"}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">Servers</h2>
+          <div className="flex flex-wrap gap-2">
+            {sources.map((item, index) => {
+              const params = new URLSearchParams({
+                season: String(seasonNumber),
+                episode: String(episodeNumber),
+                audio,
+                server: item.id,
+              });
+
+              return (
+                <Link
+                  key={item.id}
+                  href={`/anime/watch/${id}?${params.toString()}`}
+                  className={`rounded-lg border px-4 py-2 text-sm ${
+                    source?.id === item.id
+                      ? "border-red-500 bg-red-500 text-white"
+                      : "border-white/15 hover:bg-white/10"
+                  }`}
+                >
+                  {item.label || `Server ${index + 1}`}
+                </Link>
+              );
+            })}
+
+            {sources.length === 0 && (
+              <p className="text-sm text-gray-500">
+                No {audio === "sub" ? "subtitled" : "dubbed"} servers available.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {seasons.length > 1 && (
+          <section className="mt-8">
+            <h2 className="mb-3 text-lg font-bold">Seasons</h2>
+            <div className="flex flex-wrap gap-2">
+              {seasons.map((season) => (
+                <Link
+                  key={season}
+                  href={`/anime/watch/${id}?season=${season}&episode=1&audio=${audio}`}
+                  className={`rounded-lg border px-4 py-2 text-sm ${
+                    season === seasonNumber
+                      ? "border-red-500 bg-red-500"
+                      : "border-white/15 hover:bg-white/10"
+                  }`}
+                >
+                  Season {season}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">Episodes</h2>
+          {seasonEpisodes.length ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 md:grid-cols-8">
+              {seasonEpisodes
+                .slice()
+                .sort((a, b) => a.number - b.number)
+                .map((item) => (
+                  <Link
+                    key={`${item.season ?? 1}-${item.number}`}
+                    href={episodeHref(item.number)}
+                    className={`rounded-lg border p-3 text-center text-sm ${
+                      item.number === episodeNumber
+                        ? "border-red-500 bg-red-500"
+                        : "border-white/10 bg-white/[0.03] hover:bg-white/10"
+                    }`}
+                  >
+                    {item.number}
+                  </Link>
+                ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              No streams are configured for this season yet.
+            </p>
+          )}
+        </section>
+
+        <p className="mt-8 text-xs text-gray-500">
+          Only configure streams you own or are authorized to distribute.
+        </p>
+      </div>
+    </main>
+  );
+}
